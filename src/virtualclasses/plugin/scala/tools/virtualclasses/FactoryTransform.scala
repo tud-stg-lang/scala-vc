@@ -32,7 +32,6 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
 
   def newTransformer(unit: CompilationUnit) = new NewTransformer(unit)
 
-
   /**
    * The type transformation applied by this component. The trait InfoTransform
    *  will create an instance of InfoTransformer applying this TypeMap. The type
@@ -41,14 +40,13 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
    */
   private val infoTransformer = new TypeMap {
     def apply(tp: Type): Type = mapOver(tp) match {
-      case ClassInfoType(parents, decls0, clazz) 
-        if (clazz.isVirtualClass) =>
-          println("infoTransformer: virtual class " + clazz)
-          val decls = new Scope(decls0)
-          for (member <- decls0; if member.isClass && !member.isAbstract)
-            decls.enter(mkFactory(member, clazz))
+      case ClassInfoType(parents, decls0, clazz) if (clazz.isVirtualClass) =>
+        println("infoTransformer: virtual class " + clazz)
+        val decls = new Scope(decls0)
+        for (member <- decls0; if member.isClass && !member.isAbstract)
+          decls.enter(mkFactory(member, clazz))
 
-          ClassInfoType(parents, decls, clazz)
+        ClassInfoType(parents, decls, clazz)
 
       case tp0 => tp0
     }
@@ -105,19 +103,62 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
   }
 
   class NewTransformer(val unit: CompilationUnit) extends TypingTransformer(unit) {
-    override def transform(tree0: Tree): Tree = {
-      val tree = super.transform(tree0)
+
+    def factoryDef(clazz: Symbol): Tree = {
+      //      var mods = Modifiers(SYNTHETIC)
+      val sym = currentOwner.newMethod(clazz.pos, factoryName(clazz))
+      sym.setInfo(MethodType(List(), clazz.tpe))
+      sym.setFlag(SYNTHETIC)
+
+      localTyper.typed {
+        atPos(clazz.pos) {
+          DefDef(sym, Literal(Constant(null)))
+          /*DefDef(mods, factoryName(clazz),
+                List(), List(), TypeTree(clazz.tpe), Literal(Constant(null))) */
+        }
+      }
+    }
+
+    /** The factory corresponding to a virtual class. */
+    protected def factory(clazz: Symbol, owner: Symbol) = atPhase(ownPhase.next) {
+      val fsym = owner.info.member(factoryName(clazz))
+      assert(fsym.isMethod, clazz)
+      fsym
+    }
+
+    override def transform(tree: Tree): Tree = {
+      // val tree = super.transform(tree0)
       tree match {
-	case cdef @ ClassDef(mods, name, tparams, impl)
-          if (cdef.symbol.isVirtualClass && !cdef.symbol.isAbstract) => 
+        /*case cdef @ ClassDef(mods, name, tparams, impl) =>
+	  println("NewTransformer.transform(ClassDef(...)" + name		)
+	  
+          if (cdef.symbol.isVirtualTrait) { // && !cdef.symbol.isAbstract) {
             println("inserting factory method into the ast for member class " 
 		    + cdef.symbol + " in virtual class " + cdef.symbol.owner)
-  
-            addFactoryDef(mods, name, tparams, impl)  
+	    List(cdef, factoryDef(cdef.symbol)) }
+ 	  else tree */
 
-        case app @ Apply(Select(New(tpt), nme.CONSTRUCTOR), args)
-          if (isVCMemberClass(app.symbol) && app.symbol.isConstructor) =>
-	   /* println("replacing constructor call for type " + app.tpe  + " at pos " + app.pos) 
+        /*******/
+        case cd: ClassDef if (cd.symbol.isVirtualTrait) =>
+          // transform the class body
+          val tclazz = super.transform(cd).asInstanceOf[ClassDef]
+
+          val synthesized = List(factoryDef(tclazz.symbol))
+
+          // add the synthesized methods
+          var template = tclazz.impl
+          template = treeCopy.Template(template, template.parents,
+            template.self, synthesized ::: template.body)
+
+          // switch the implementation
+          val result = treeCopy.ClassDef(tclazz, tclazz.mods, tclazz.name,
+            tclazz.tparams, template)
+
+          result
+
+        /******/
+        case app @ Apply(Select(New(tpt), nme.CONSTRUCTOR), args) if (isVCMemberClass(app.symbol) && app.symbol.isConstructor) =>
+          /* println("replacing constructor call for type " + app.tpe  + " at pos " + app.pos) 
 
 	    val clazz = app.symbol.owner
             val fn = 
@@ -134,15 +175,15 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
                   res
 		}
             } */
-	    tree
-	    
-        case _ => tree
+          tree
+
+        case _ => super.transform(tree)
       }
     }
 
     protected def mkFactoryCall(tpe: Type, args: List[Tree]) = throw new Exception("not implemented")
-    protected def addFactoryDef(mods: Modifiers, name: Name, tparams: List[TypeDef], impl: Template) = throw new Exception("not implemented")
-    protected def isVCMemberClass(sym : Symbol) = sym.isClass && sym.owner.isVirtualClass
+    protected def addFactoryDef(mods: Modifiers, name: Name, tparams: List[TypeDef], impl: Template): Tree = throw new Exception("not implemented")
+    protected def isVCMemberClass(sym: Symbol) = sym.isClass && sym.owner.isVirtualClass
 
   }
 }

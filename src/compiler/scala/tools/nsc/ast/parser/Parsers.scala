@@ -2583,9 +2583,12 @@ self =>
           var mods1 = mods
           if (isTrait) {
             if (settings.YvirtClasses && in.token == SUBTYPE) mods1 |= Flags.DEFERRED
-          } else if (in.token == SUBTYPE) {
+          } 
+	  /* Begin Oliver */
+	  /*else if (in.token == SUBTYPE) {
             syntaxError("classes are not allowed to be virtual", false)
-          }
+          }*/
+	  /* End Oliver */
           val template = templateOpt(mods1, name, constrMods withAnnotations constrAnnots, vparamss, tstart)
           if (isInterface(mods1, template.body)) mods1 |= Flags.INTERFACE 
           val result = ClassDef(mods1, name, tparams, template)
