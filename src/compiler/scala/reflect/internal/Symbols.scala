@@ -493,8 +493,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       (!hasFlag(METHOD | BYNAMEPARAM) || hasFlag(STABLE)) && 
       !(tpe.isVolatile && !hasAnnotation(uncheckedStableClass))
 
-    // def isVirtualClass = hasFlag(DEFERRED) && isClass
-    // def isVirtualTrait = hasFlag(DEFERRED) && isTrait
+    def isVirtualClass = hasFlag(DEFERRED) && isClass
+    def isVirtualTrait = hasFlag(DEFERRED) && isTrait
     def isLiftedMethod = isMethod && hasFlag(LIFTED)
     def isCaseClass    = isClass && isCase
     

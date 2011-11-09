@@ -1,0 +1,5 @@
+<!-- $Id$ -->
+<plugin>
+  <name>virtualclasses</name>
+  <classname>scala.tools.virtualclasses.VCPlugin</classname>
+</plugin>
