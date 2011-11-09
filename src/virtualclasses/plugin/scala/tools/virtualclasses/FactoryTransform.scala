@@ -18,19 +18,20 @@ import scala.tools.nsc.transform.TypingTransformers
  *  variable <code>localTyper: Typer</code> that is always updated to
  *  the current context.
  */
-class FactoryTransform(val global: Global) extends PluginComponent
+abstract class FactoryTransform(val global: Global) extends PluginComponent
   with TypingTransformers
   with InfoTransform {
 
   import global._
   import global.definitions._
 
-  val runsBefore = List[String]("refchecks")
-  val phaseName = "virtualclasses_factories"
+  override val runsBefore = List[String]("refchecks") //TODO before superaccessors??
+  override val phaseName = "virtualclasses_factories"
 
   def transformInfo(sym: Symbol, tp: Type): Type = infoTransformer.mapOver(tp)
 
   def newTransformer(unit: CompilationUnit) = new NewTransformer(unit)
+
 
   /**
    * The type transformation applied by this component. The trait InfoTransform
@@ -116,7 +117,7 @@ class FactoryTransform(val global: Global) extends PluginComponent
 
         case app @ Apply(Select(New(tpt), nme.CONSTRUCTOR), args)
           if (isVCMemberClass(app.symbol) && app.symbol.isConstructor) =>
-	    println("replacing constructor call for type " + app.tpe  + " at pos " + app.pos) 
+	   /* println("replacing constructor call for type " + app.tpe  + " at pos " + app.pos) 
 
 	    val clazz = app.symbol.owner
             val fn = 
@@ -132,8 +133,9 @@ class FactoryTransform(val global: Global) extends PluginComponent
 		  println("typing "+res+" from "+args)
                   res
 		}
-            }
-
+            } */
+	    tree
+	    
         case _ => tree
       }
     }

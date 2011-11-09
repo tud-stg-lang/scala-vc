@@ -601,11 +601,50 @@ QUICK BUILD (QUICK)
 
   <target name="quick.pre-plugins" depends="quick.comp">
     <uptodate property="quick.plugins.available" targetfile="${build-quick.dir}/plugins.complete">
-      <srcfiles dir="${src.dir}/continuations"/>
+            <srcfiles dir="${src.dir}/continuations"/>
+            <srcfiles dir="${src.dir}/virtualclasses"/>
     </uptodate>
   </target>
 
-  <target name="quick.plugins" depends="quick.pre-plugins" unless="quick.plugins.available">
+  <target name="quick.plugins.virtualclasses" depends="quick.pre-plugins" unless="quick.plugins.available">
+    <stopwatch name="quick.plugins.timer"/>
+    <mkdir dir="${build-quick.dir}/classes/virtualclasses-plugin"/>
+    <scalacfork
+      destdir="${build-quick.dir}/classes/virtualclasses-plugin"
+      compilerpathref="locker.classpath"
+      params="${scalac.args.quick} -deprecation"
+      srcdir="${src.dir}/virtualclasses/plugin"
+      jvmargs="${scalacfork.jvmargs}">
+      <include name="**/*.scala"/>
+      <compilationpath>
+        <pathelement location="${build-quick.dir}/classes/library"/>
+        <pathelement location="${build-quick.dir}/classes/compiler"/>
+        <pathelement location="${build-quick.dir}/classes/virtualclasses-plugin"/>
+        <path refid="aux.libs"/>
+      </compilationpath>
+    </scalacfork>
+    <copy
+       file="${src.dir}/virtualclasses/plugin/scalac-plugin.xml"
+       todir="${build-quick.dir}/classes/virtualclasses-plugin"/>
+    <!-- not very nice to create jar here but needed to load plugin -->
+    <mkdir dir="${build-quick.dir}/misc/scala-devel/plugins"/>
+    <jar destfile="${build-quick.dir}/misc/scala-devel/plugins/virtualclasses.jar">
+      <fileset dir="${build-quick.dir}/classes/virtualclasses-plugin"/>
+    </jar>
+    <!-- might split off library part into its own ant target -->
+    <!-- <scalacfork
+      destdir="${build-quick.dir}/classes/library"
+      compilerpathref="locker.classpath"
+      params="${scalac.args.quick} -Xpluginsdir ${build-quick.dir}/misc/scala-devel/plugins -Xplugin-require:virtualclasses -P:virtualclasses:enable"
+      srcdir="${src.dir}/virtualclasses/library"
+      jvmargs="${scalacfork.jvmargs}">
+      <include name="**/*.scala"/>
+      <compilationpath refid="quick.compilation.path"/>
+    </scalacfork> -->
+          
+  </target>
+
+  <target name="quick.plugins" depends="quick.plugins.virtualclasses">
     <stopwatch name="quick.plugins.timer"/>
     <mkdir dir="${build-quick.dir}/classes/continuations-plugin"/>
     <scalacfork

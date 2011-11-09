@@ -15,9 +15,11 @@ class VCPlugin(val global: Global) extends Plugin {
   val name = "virtualclasses"
   val description = "adds support for virtual classes"
   
-  val addFactoriesPhase = new FactoryTransform(this.global)
+  val addFactoriesPhase = new FactoryTransform(this.global) {
+    val runsAfter = List("typer")
+  }
   
-  val components = List[PluginComponent](addFactoriesPhase)
+  override val components = List[PluginComponent](addFactoriesPhase)
 
   global.log("instantiated virtualclasses plugin: " + this)
 
