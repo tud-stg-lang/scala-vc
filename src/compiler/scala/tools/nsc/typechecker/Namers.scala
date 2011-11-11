@@ -1383,9 +1383,14 @@ trait Namers { self: Analyzer =>
       if (sym hasFlag DEFERRED) { // virtual classes count, too
         if (sym.hasAnnotation(NativeAttr))
           sym.resetFlag(DEFERRED)
-        else if (!sym.isValueParameter && !sym.isTypeParameterOrSkolem &&
+        /* begin oliver */
+        else if (!sym.isVirtualClass && !sym.isVirtualTrait && !sym.isValueParameter && !sym.isTypeParameterOrSkolem &&
           !context.tree.isInstanceOf[ExistentialTypeTree] &&
-          (!sym.owner.isClass || sym.owner.isModuleClass || sym.owner.isAnonymousClass)) {
+          (!sym.owner.isClass || sym.owner.isModuleClass || sym.owner.isAnonymousClass))
+        /*if (!sym.isValueParameter && !sym.isTypeParameterOrSkolem &&
+          !context.tree.isInstanceOf[ExistentialTypeTree] &&
+          (!sym.owner.isClass || sym.owner.isModuleClass || sym.owner.isAnonymousClass))*/
+        /* end oliver */        {
             context.error(sym.pos, 
               "only classes can have declared but undefined members" + abstractVarMessage(sym))
             sym.resetFlag(DEFERRED)

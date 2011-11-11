@@ -1,5 +1,3 @@
-// $Id$
-
 package scala.tools.virtualclasses
 
 import scala.tools.nsc

@@ -2581,11 +2581,13 @@ self =>
             if (isTrait) (Modifiers(Flags.TRAIT), List())
             else (accessModifierOpt(), paramClauses(name, classContextBounds, mods.isCase))
           var mods1 = mods
-          if (isTrait) {
-            if (settings.YvirtClasses && in.token == SUBTYPE) mods1 |= Flags.DEFERRED
-          } 
+
 	  /* Begin Oliver */
-	  /*else if (in.token == SUBTYPE) {
+          if (settings.YvirtClasses && in.token == SUBTYPE) mods1 |= Flags.DEFERRED
+           /* if (isTrait) {
+            if (settings.YvirtClasses && in.token == SUBTYPE) mods1 |= Flags.DEFERRED
+          }
+	        else if (in.token == SUBTYPE) {
             syntaxError("classes are not allowed to be virtual", false)
           }*/
 	  /* End Oliver */
@@ -2702,7 +2704,10 @@ self =>
         else Nil
       )
       val (parents0, argss, self, body) = (
-        if (in.token == EXTENDS || in.token == SUBTYPE && mods.hasTraitFlag) { 
+        /* begin oliver */
+//        if (in.token == EXTENDS || in.token == SUBTYPE && mods.hasTraitFlag) {
+        if (in.token == EXTENDS || in.token == SUBTYPE) {
+        /* end oliver */
           in.nextToken()
           template(mods.hasTraitFlag)
         }
