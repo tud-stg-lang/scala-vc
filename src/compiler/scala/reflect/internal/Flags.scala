@@ -92,7 +92,7 @@ class ModifierFlags {
   final val CASE          = 0x00000800
   final val ABSTRACT      = 0x00000008    // abstract class, or used in conjunction with abstract override.
                                           // Note difference to DEFERRED!
-  final val DEFERRED      = 0x00000010    // was `abstract' for members | trait is virtual
+  final val DEFERRED      = 0x00000010    // was `abstract' for members | trait is virtual | class is virtual
   final val INTERFACE     = 0x00000080    // symbol is an interface (i.e. a trait which defines only abstract methods)  
   final val MUTABLE       = 0x00001000    // symbol is a mutable variable.
   final val PARAM         = 0x00002000    // symbol is a (value or type) parameter to a method

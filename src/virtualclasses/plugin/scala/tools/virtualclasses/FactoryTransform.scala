@@ -3,20 +3,12 @@ package scala.tools.virtualclasses
 import scala.tools.nsc._
 import scala.tools.nsc.symtab.Flags._
 import scala.tools.nsc.plugins.PluginComponent
-import scala.tools.nsc.transform.InfoTransform
 import scala.tools.nsc.transform.TypingTransformers
+import scala.tools.nsc.transform.InfoTransform
 
 /**
  *  Inserts synthetic factory methods for virtual class member types
  *  and replaces 'new' calls with appropriate factory invocations.
- *
- *  This class implements a plugin component using tree transformers and
- *  InfoTransformer. An InfoTransformer will be automatically created
- *  and registered in <code>SymbolTable.infoTransformers</code>. If
- *  a <code>Typer</code> is needed during transformation, the component
- *  should mix in <code>TypingTransformers</code>. This provides a local
- *  variable <code>localTyper: Typer</code> that is always updated to
- *  the current context.
  */
 abstract class FactoryTransform(val global: Global) extends PluginComponent
   with TypingTransformers
@@ -28,58 +20,9 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
   override val runsBefore = List[String]("refchecks") //TODO before superaccessors??
   override val phaseName = "virtualclasses_factories"
 
-  def transformInfo(sym: Symbol, tp: Type): Type = infoTransformer.mapOver(tp)
+  def transformInfo(sym: Symbol, tpe: Type) = tpe
 
-  def newTransformer(unit: CompilationUnit) = new NewTransformer(unit)
-
-  /**
-   * The type transformation applied by this component. The trait InfoTransform
-   *  will create an instance of InfoTransformer applying this TypeMap. The type
-   *  map will be applied when computing a symbol's type in all phases
-   *  <em>after</em> "virtualclasses"
-   */
-  private val infoTransformer = new TypeMap {
-    def apply(tp: Type): Type = mapOver(tp) match {
-      case ClassInfoType(parents, decls0, clazz) if (clazz.isVirtualClass) =>
-        println("infoTransformer: virtual class " + clazz)
-        val decls = new Scope(decls0)
-        for (member <- decls0; if member.isClass && !member.isAbstract)
-          decls.enter(mkFactory(member, clazz))
-
-        ClassInfoType(parents, decls, clazz)
-
-      case tp0 => tp0
-    }
-  }
-
-  /*
-   * Creates a synthetic factory method symbol for
-   * a given member class in an enclosing virtual class.
-   * The factory has the same AccessFlags as the
-   * member class.
-   *
-   * @param memClaz The member class
-   * @param clazz The enclosing virtual class
-   */
-  protected def mkFactory(memClazz: Symbol, clazz: Symbol) = {
-    println("creating factory symbol for " + memClazz + " in class " + clazz)
-
-    val factory = clazz.newMethod(clazz.pos, factoryName(clazz))
-      .setFlag(memClazz.flags & AccessFlags | SYNTHETIC)
-      .setAnnotations(memClazz.annotations)
-
-    factory setInfo new PolyTypeCompleter(factory, memClazz) {
-      private def copyType(tpe: Type): Type = tpe match {
-        case MethodType(formals, restpe) => MethodType(formals, copyType(restpe))
-        case NullaryMethodType(restpe) => NullaryMethodType(copyType(restpe))
-        case PolyType(_, _) => abort("bad case: " + tpe)
-        case _ => clazz.thisType.memberType(memClazz)
-      }
-      def getInfo = copyType(memClazz.primaryConstructor.tpe)
-    }
-
-    factory
-  }
+  def newTransformer(unit: CompilationUnit) = new FactoryTransformer(unit)
 
   /** Names of derived classes and factories */
   protected def concreteClassName(clazz: Symbol) =
@@ -87,26 +30,11 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
   protected def factoryName(clazz: Symbol) =
     atPhase(ownPhase) { newTermName("new$" + clazz.name) }
 
-  /**
-   * A lazy type to complete `sym`, which is is generated for virtual class
-   *  `clazz`.
-   *  The info of the symbol is computed by method `getInfo`.
-   *  It is wrapped in copies of the type parameters of `clazz`.
-   */
-  abstract class PolyTypeCompleter(sym: Symbol, clazz: Symbol) extends LazyType {
-    def getInfo: Type
-    override val typeParams = cloneSymbols(clazz.typeParams, sym)
-    override def complete(sym: Symbol) {
-      sym.setInfo(
-        getInfo.substSym(clazz.typeParams, typeParams))
-    }
-  }
+  class FactoryTransformer(val unit: CompilationUnit) extends TypingTransformer(unit) {
 
-  class NewTransformer(val unit: CompilationUnit) extends TypingTransformer(unit) {
-
-    def factoryDef(clazz: Symbol): Tree = {
+    def factoryDef(owner: Symbol, clazz: Symbol): Tree = {
       //      var mods = Modifiers(SYNTHETIC)
-      val sym = currentOwner.newMethod(clazz.pos, factoryName(clazz))
+      val sym = owner.newMethod(clazz.pos, factoryName(clazz))
       sym.setInfo(MethodType(List(), clazz.tpe))
       sym.setFlag(SYNTHETIC)
 
@@ -126,37 +54,24 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
       fsym
     }
 
-    override def transform(tree: Tree): Tree = {
-      // val tree = super.transform(tree0)
+    override def transform(tree0: Tree): Tree = {
+      val tree = super.transform(tree0)
       tree match {
-        /*case cdef @ ClassDef(mods, name, tparams, impl) =>
-	  println("NewTransformer.transform(ClassDef(...)" + name		)
-	  
-          if (cdef.symbol.isVirtualTrait) { // && !cdef.symbol.isAbstract) {
-            println("inserting factory method into the ast for member class " 
-		    + cdef.symbol + " in virtual class " + cdef.symbol.owner)
-	    List(cdef, factoryDef(cdef.symbol)) }
- 	  else tree */
 
-        /*******/
-        case cd: ClassDef if (cd.symbol.isVirtualTrait) =>
-          // transform the class body
-          val tclazz = super.transform(cd).asInstanceOf[ClassDef]
+        case classdef: ClassDef if(containsVirtualClasses(classdef)) =>
+            val synthesized = getVirtualClasses(classdef) map (factoryDef (classdef.symbol,_))
 
-          val synthesized = List(factoryDef(tclazz.symbol))
+            // add the synthesized methods
+            var template = classdef.impl
+            template = treeCopy.Template(template, template.parents,
+              template.self, synthesized ::: template.body)
 
-          // add the synthesized methods
-          var template = tclazz.impl
-          template = treeCopy.Template(template, template.parents,
-            template.self, synthesized ::: template.body)
+            // switch the implementation
+            val result = treeCopy.ClassDef(classdef, classdef.mods, classdef.name,
+              classdef.tparams, template)
 
-          // switch the implementation
-          val result = treeCopy.ClassDef(tclazz, tclazz.mods, tclazz.name,
-            tclazz.tparams, template)
+            result
 
-          result
-
-        /******/
         case app @ Apply(Select(New(tpt), nme.CONSTRUCTOR), args) if (isVCMemberClass(app.symbol) && app.symbol.isConstructor) =>
           /* println("replacing constructor call for type " + app.tpe  + " at pos " + app.pos) 
 
@@ -177,7 +92,8 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
             } */
           tree
 
-        case _ => super.transform(tree)
+
+        case _ => tree
       }
     }
 
@@ -185,5 +101,7 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent
     protected def addFactoryDef(mods: Modifiers, name: Name, tparams: List[TypeDef], impl: Template): Tree = throw new Exception("not implemented")
     protected def isVCMemberClass(sym: Symbol) = sym.isClass && sym.owner.isVirtualClass
 
+    protected def containsVirtualClasses(tree: ClassDef) = tree.symbol.info.decls exists (_.isVirtualClass)
+    protected def getVirtualClasses(tree: ClassDef) = tree.symbol.info.decls.toList filter (_.isVirtualClass)
   }
 }
