@@ -7,22 +7,29 @@ import nsc.Phase
 import nsc.plugins.Plugin
 import nsc.plugins.PluginComponent
 
+
 class VCPlugin(val global: Global) extends Plugin {
   import global._
 
   val name = "virtualclasses"
   val description = "adds support for virtual classes"
-  
-  val addFactoriesPhase = new FactoryTransform(this.global) {
+
+ /* val addTraitsPhase = new TraitTransform(this.global) {
     val runsAfter = List("typer")
+    val runsBefore= List("virtualclasses_factories")
+  }*/
+
+  val addFactoriesPhase = new FactoryTransform(this.global) {
+    override val runsAfter = List("namer")
+    override val runsBefore = List[String]("refchecks") //TODO before superaccessors??
   }
   
-  override val components = List[PluginComponent](addFactoriesPhase)
+  override val components = List[PluginComponent](addFactoriesPhase) // List[PluginComponent](addTraitsPhase, addFactoriesPhase)
 
   global.log("instantiated virtualclasses plugin: " + this)
 
   def setEnabled(flag: Boolean) = {
-   // newPhase setEnabled flag
+   // newPhase setEnabled flag //TODO
   }
 
   // TODO: require -enabled command-line flag

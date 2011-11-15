@@ -21,6 +21,13 @@ class Foo <: {
 
 object Foo {
   def main(args: Array[String]) {
+
+      val foo : Foo = new Foo    
+      val x : foo.X = new foo.X
+      val y : foo.Y = new foo.Y
+
+      println(x != null)
+      println(y != null)
       println("Hello world")
   }
 }
