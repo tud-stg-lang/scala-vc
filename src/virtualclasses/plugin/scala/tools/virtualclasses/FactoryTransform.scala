@@ -15,15 +15,14 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
 
   import global._
 
+  val FACTORYPREFIX = "new$"
 
   override val phaseName = "virtualclasses_factories"
 
   def mkFactorySym(owner: Symbol, clazz: Symbol): Symbol = {
-      val argSyms = clazz.primaryConstructor.info.params
       val factorySym = owner.newMethod(clazz.pos, factoryName(clazz))
-      factorySym.setInfo(MethodType(argSyms, clazz.tpe))
+      factorySym.setInfo(clazz.primaryConstructor.info.cloneInfo(factorySym))
       factorySym.setFlag(SYNTHETIC)
-
       factorySym
   }
 
@@ -34,7 +33,7 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
   protected[FactoryTransform] def concreteClassName(clazz: Symbol) =
      newTypeName(clazz.name + "$fix")
   protected[FactoryTransform] def factoryName(clazz: Symbol) =
-     newTermName("new$" + clazz.name)
+     newTermName(FACTORYPREFIX + clazz.name)
 
   def newTransformer(unit: CompilationUnit) = new FactoryTransformer(unit)
 
@@ -56,32 +55,37 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
       }
     }
 
+    def isFactoryDefDef(defdef : DefDef) = {
+      defdef.symbol.hasFlag(SYNTHETIC) &&
+      defdef.rhs.symbol.owner.isVirtualClass &&
+      defdef.symbol.name.startsWith(FACTORYPREFIX) &&
+      defdef.symbol.name.endsWith(defdef.rhs.symbol.owner.name) &&
+      defdef.symbol.name.length == (FACTORYPREFIX.length + defdef.rhs.symbol.owner.name.length)
+    }
 
     override def transform(tree : Tree) : Tree = {
       postTransform(preTransform(tree))
     }
 
-    protected def postTransform(tree0 : Tree) : Tree = {
-      val tree = super.transform(tree0)
+    protected def postTransform(tree : Tree) : Tree = {
       tree match {
-        case  app @ Apply(sel @ Select(New(tpt), nme.CONSTRUCTOR), args)
+        case defdef: DefDef if(isFactoryDefDef(defdef)) => defdef
+
+        case app @ Apply(sel @ Select(New(tpt), nme.CONSTRUCTOR), args)
            if(app.symbol.owner.isVirtualClass && app.symbol.isConstructor) =>
 
            val clazz = app.symbol.owner
-           val factorySelect = Select(TypeTree(clazz.owner.tpe),
-                                      factoryName(clazz))
-           val targs = tpt.tpe.typeArgs
 
-         localTyper.typed {
+           localTyper.typed {
              atPos(tree.pos) {
-                 Apply(if (targs.isEmpty)
-                          factorySelect
-                       else TypeApply(factorySelect, targs map TypeTree),
-                       args)
+               gen.mkMethodCall(Select(gen.mkAttributedQualifier(tpt.tpe.prefix),
+                                       factoryName(clazz)),
+                                tpt.tpe.typeArgs,
+                                args)
              }
-         }
+           }
 
-        case _ => tree
+        case _ => super.transform(tree)
       }
     }
 

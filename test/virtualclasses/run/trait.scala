@@ -1,5 +1,5 @@
 
-class X { 
+abstract class X { 
   val x = 5
 
 
@@ -8,22 +8,37 @@ class X {
   }
 
   class Z(x : Int, y : Int) <: {
-      
+     def this(s : String) {
+       this(1,2)
+     }
+
+     def this(x : Int) {
+       this(1,2)
+     }
   }
 
   def factory1 = new Y
   def factory2(x : Int, y : Int) = new Z(x, y)
+  def factory3 = factory2(3,4)
 
   val z = new Z(1,2)
   
 }
 
-trait X$trait {
-  val x = 5
+class T(val o : X) { 
+
+val z = new o.Z(2,3)
+  val y = new o.Y()
+  val y1 = o.factory1
+  val z1 = o.factory2(2,3)
+
 }
 
+class XImp extends X {
 
-class Xtransformed extends X$trait { }
+  
+
+}
 
 object X extends App {
   println("works")
