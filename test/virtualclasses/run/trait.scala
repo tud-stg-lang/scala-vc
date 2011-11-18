@@ -37,10 +37,19 @@ val z = new o.Z(2,3)
 
 class Foo {
 
-  class Bar[T1,T2] <: {
-      def factory1 = new Bar[T1,T2]
-      def factory2 = new Bar[Int,String]
+  class Bar[T1,T2](x : T1, y : T2) <: {
+      def factory1(x : T1, y : T2) = new Bar[T1,T2](x,y)
+      def factory2 = new Bar[Int,String](1,"")
+
   }
+
+  def factory[M1,N1] = new Z[M1,N1]
+
+  class Z[M,N] { 
+    
+  
+  }
+
 
 }
 
@@ -54,6 +63,11 @@ object X extends App {
   println(t.y1)
   println(t.z1)
 
+  val foo = new Foo
+
+  val bar = new foo.Bar[Int,Int](1337,4711)
+  println(bar)
+  
 }
 
 

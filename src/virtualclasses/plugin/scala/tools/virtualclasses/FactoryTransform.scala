@@ -42,9 +42,19 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
   class FactoryTransformer(val unit: CompilationUnit) extends TypingTransformer(unit) {
 
     protected def mkFactorySym(owner: Symbol, clazz: Symbol): Symbol = {
-      val factorySym = owner.newMethod(clazz.pos, factoryName(clazz))
-      factorySym.setInfo(clazz.primaryConstructor.info.cloneInfo(factorySym))
-      factorySym.setFlag(clazz.flags & AccessFlags | SYNTHETIC).setAnnotations(clazz.annotations)
+      val factorySym = owner.newMethod(clazz.pos, factoryName(clazz)
+      val tparams =  clazz.typeParams map (_.cloneSymbol(factorySym))
+
+      def cloneAndSubst(s : Symbol) : Symbol = {
+        s.cloneSymbol(factorySym).setInfo(
+        s.tpe.substSym(clazz.typeParams, tparams))
+      }
+      val params = clazz.primaryConstructor.paramss flatMap  ( _.map (cloneAndSubst))
+      //val tparams = clazz.typeParams map ( s => { val skolem = s.cloneSymbol(factorySym).newTypeSkolem
+                                                  //skolem.setInfo(s.info.cloneInfo(skolem))
+                                                 // skolem})
+      factorySym.setInfo(polyType(tparams, MethodType(params, clazz.tpe.substSym(clazz.typeParams, tparams))))
+      factorySym.setFlag(clazz.flags & AccessFlags | SYNTHETIC)
       factorySym
     }
 
@@ -59,11 +69,10 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
 
     //TODO support for overloaded constructors
     //TODO annotations
-    //TODO type parameters for factory
     protected def mkFactoryDefDef(owner: Symbol, clazz: Symbol): Tree = {
       val factorySym = mkFactorySym(owner, clazz)
       val args = factorySym.paramss map (_.map(Ident))  //TODO clone or not?
-      val ctorCall = New(TypeTree(clazz.tpe), args)
+      val ctorCall = New(TypeTree(clazz.tpe.substSym(clazz.typeParams, factorySym.typeParams)), args)
 
       localTyper.typed {
         atPos(clazz.pos) {
@@ -97,7 +106,7 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
              atPos(tree.pos) {
                gen.mkMethodCall(Select(gen.mkAttributedQualifier(tpt.tpe.prefix),
                                        factoryName(clazz)),
-                                //tpt.tpe.typeArgs,
+                                tpt.tpe.typeArgs,
                                 args)
              }
            }
