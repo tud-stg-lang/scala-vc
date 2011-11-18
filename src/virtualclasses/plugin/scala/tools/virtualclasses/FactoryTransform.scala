@@ -11,7 +11,7 @@ import scala.tools.nsc.transform._
  *  and replaces 'new' calls with appropriate factory invocations.
  */
 abstract class FactoryTransform(val global: Global) extends PluginComponent with Transform
-  with TypingTransformers {
+  with TypingTransformers with InfoTransform {
 
   import global._
 
@@ -19,43 +19,60 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
 
   override val phaseName = "virtualclasses_factories"
 
-  def mkFactorySym(owner: Symbol, clazz: Symbol): Symbol = {
-      val factorySym = owner.newMethod(clazz.pos, factoryName(clazz))
-      factorySym.setInfo(clazz.primaryConstructor.info.cloneInfo(factorySym))
-      factorySym.setFlag(SYNTHETIC)
-      factorySym
+  override def transformInfo(sym : Symbol, tpe : Type) = infoTransformer(tpe)
+
+  //TODO this is here for testing purposes
+  //removes DEFERRED flags from virtuals and
+  //should be moved to a more appropriate phase later on
+  private object infoTransformer extends TypeMap {
+    def apply(tpe : Type) = mapOver(tpe) match {
+      case cit @ ClassInfoType(parents, decls, clazz)
+        if(clazz.isVirtualClass) =>
+          clazz.resetFlag(DEFERRED)
+          cit
+
+      case x => x
+
+    }
   }
 
-  protected[FactoryTransform] def containsVirtualClasses(sym: Symbol) = sym.info.decls exists (_.isVirtualClass)
-  protected[FactoryTransform] def getVirtualClasses(sym: Symbol) = sym.info.decls.toList filter (_.isVirtualClass)
-
-  /** Names of derived classes and factories */
-  protected[FactoryTransform] def concreteClassName(clazz: Symbol) =
-     newTypeName(clazz.name + "$fix")
-  protected[FactoryTransform] def factoryName(clazz: Symbol) =
-     newTermName(FACTORYPREFIX + clazz.name)
 
   def newTransformer(unit: CompilationUnit) = new FactoryTransformer(unit)
 
   class FactoryTransformer(val unit: CompilationUnit) extends TypingTransformer(unit) {
 
+    protected def mkFactorySym(owner: Symbol, clazz: Symbol): Symbol = {
+      val factorySym = owner.newMethod(clazz.pos, factoryName(clazz))
+      factorySym.setInfo(clazz.primaryConstructor.info.cloneInfo(factorySym))
+      factorySym.setFlag(clazz.flags & AccessFlags | SYNTHETIC).setAnnotations(clazz.annotations)
+      factorySym
+    }
+
+    protected def containsVirtualClasses(sym: Symbol) = sym.info.decls exists (_.isVirtualClass)
+    protected def getVirtualClasses(sym: Symbol) = sym.info.decls.toList filter (_.isVirtualClass)
+
+    /** Names of derived classes and factories */
+    protected def concreteClassName(clazz: Symbol) =
+      newTypeName(clazz.name + "$fix")
+    protected def factoryName(clazz: Symbol) =
+      newTermName(FACTORYPREFIX + clazz.name)
+
     //TODO support for overloaded constructors
-    //TODO factory needs to inherit (some) flags from class
     //TODO annotations
     //TODO type parameters for factory
-    def mkFactoryDefDef(owner: Symbol, clazz: Symbol): Tree = {
-      val sym = mkFactorySym(owner, clazz)
-      val args = sym.paramss map (_.map(Ident))
+    protected def mkFactoryDefDef(owner: Symbol, clazz: Symbol): Tree = {
+      val factorySym = mkFactorySym(owner, clazz)
+      val args = factorySym.paramss map (_.map(Ident))  //TODO clone or not?
       val ctorCall = New(TypeTree(clazz.tpe), args)
 
       localTyper.typed {
         atPos(clazz.pos) {
-            DefDef(sym, Modifiers(sym.flags), ctorCall)
+            DefDef(factorySym, Modifiers(factorySym.flags), ctorCall)
         }
       }
     }
 
-    def isFactoryDefDef(defdef : DefDef) = {
+    protected def isFactoryDefDef(defdef : DefDef) = {
       defdef.symbol.hasFlag(SYNTHETIC) &&
       defdef.rhs.symbol.owner.isVirtualClass &&
       defdef.symbol.name.startsWith(FACTORYPREFIX) &&
@@ -80,7 +97,7 @@ abstract class FactoryTransform(val global: Global) extends PluginComponent with
              atPos(tree.pos) {
                gen.mkMethodCall(Select(gen.mkAttributedQualifier(tpt.tpe.prefix),
                                        factoryName(clazz)),
-                                tpt.tpe.typeArgs,
+                                //tpt.tpe.typeArgs,
                                 args)
              }
            }

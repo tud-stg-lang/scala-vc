@@ -1,5 +1,5 @@
 
-abstract class X { 
+class X { 
   val x = 5
 
 
@@ -34,14 +34,26 @@ val z = new o.Z(2,3)
 
 }
 
-class XImp extends X {
 
-  
+class Foo {
+
+  class Bar[T1,T2] <: {
+      def factory1 = new Bar[T1,T2]
+      def factory2 = new Bar[Int,String]
+  }
 
 }
 
 object X extends App {
-  println("works")
+  println("compiles")
+
+  val t = new T(new X)
+
+  println(t.y)
+  println(t.z)
+  println(t.y1)
+  println(t.z1)
+
 }
 
 
