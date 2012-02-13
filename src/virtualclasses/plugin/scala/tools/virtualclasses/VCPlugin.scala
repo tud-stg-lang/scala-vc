@@ -14,17 +14,12 @@ class VCPlugin(val global: Global) extends Plugin {
   val name = "virtualclasses"
   val description = "adds support for virtual classes"
 
- /* val addTraitsPhase = new TraitTransform(this.global) {
-    val runsAfter = List("typer")
-    val runsBefore= List("virtualclasses_factories")
-  }*/
-
-  val addFactoriesPhase = new FactoryTransform(this.global) {
+  val addPhase = new VCTransform(this.global) {
     override val runsAfter = List("namer")
     override val runsBefore = List[String]("refchecks") //TODO before superaccessors??
   }
   
-  override val components = List[PluginComponent](addFactoriesPhase) // List[PluginComponent](addTraitsPhase, addFactoriesPhase)
+  override val components = List[PluginComponent](addPhase)
 
   global.log("instantiated virtualclasses plugin: " + this)
 
