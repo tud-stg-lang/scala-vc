@@ -10,10 +10,12 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
   with TypingTransformers with InfoTransform {
 
   import global._
-                  
+
+  //Prefixes for synthesized symbol names:
   val FACTORYPREFIX = "VC_NEW$"
   val TRAITPREFIX = "VC_TRAIT$"
-  val ABSTPEPREFIX = "VC_T$" //this is here for debugging purposes
+  //this is here for debugging purposes, the abstract types will inherit the virtual class' name eventually
+  val ABSTPEPREFIX = "VC_T$"
 
   override val phaseName = "virtualclasses"
 
@@ -37,35 +39,36 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
                    
           for (m <- decls0.toList) {
             if (m.isVirtualClass) {
+              //in this case we replace the entry with workertrait+abstract type+factory symbols
+              val workerTrait = mkWorkerTraitSym(m)
+              val abstpe = mkAbstractTypeSym(clazz, m, workerTrait.tpe)
+              enter(abstpe)
+              enter(mkFactorySym(clazz, m, abstpe.tpe))
+
               //do NOT put original symbol of virtual class back
-              val newM = m.cloneSymbol(m.owner)
-                  newM.setFlag(TRAIT | SYNTHETIC)
-                  newM.resetFlag(DEFERRED)
-                  newM.name = workerTraitName(m)
-              fixCtors(newM)
-
-              //newM setInfo newM.info.substSym(List(m), List(newM))
-
-              enter(mkAbstractTypeSym(clazz, m, newM.tpe))
-              enter(mkFactorySym(clazz, m))
-              enter(newM)
+              //having virtual class and trait as separate symbols
+              //allows us to identify if a tree's symbol is a virtual class
+              //later in the TypingTransformer
+              enter(workerTrait)
             }
             else enter(m)
           }
           ClassInfoType(parents map this, decls, clazz)
 
-      case ClassInfoType(_, _, clazz)
-       if (clazz.isVirtualClass) =>
-          val workerTrait = atPhase(ownPhase.next) { clazz.owner.info.member(workerTraitName(clazz)) }
-          workerTrait.info
+      case ClassInfoType(parents, decls, clazz)
+        if (clazz.isVirtualClass) =>
+           val workerTrait = atPhase(ownPhase.next) { clazz.owner.info.member(workerTraitName(clazz)) }
+           val info = workerTrait.info.asInstanceOf[ClassInfoType]
+           ClassInfoType(info.parents map this, mapOver(info.decls), info.typeSymbol)
 
       case ThisType(clazz)
         if (clazz.isVirtualClass) =>
            val workerTrait = atPhase(ownPhase.next) { clazz.owner.info.member(workerTraitName(clazz)) }
            ThisType(workerTrait)
 
-      case tp1 @ TypeRef(pre, clazz, args) if clazz.isVirtualClass =>
-        typeRef(pre, abstractType(clazz.owner, clazz.name), args)
+      case tp1 @ TypeRef(pre, clazz, args)
+        if clazz.isVirtualClass =>
+           typeRef(this(pre), abstractType(clazz.owner, clazz.name), args map this)
 
       case x =>
         x
@@ -74,12 +77,35 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
     }
 
     /**
+     * Worker trait symbol out of given virtual class symbol.
+     *
+     * The resulting symbol's info shares the parents and
+     * decls fields with the virtual class symbol.
+     */
+    private def mkWorkerTraitSym(clazz: Symbol): Symbol = {
+      val workerTrait = clazz.cloneSymbol(clazz.owner)
+      workerTrait.setFlag(TRAIT | SYNTHETIC)
+      workerTrait.resetFlag(DEFERRED)
+      workerTrait.name = workerTraitName(clazz)
+
+      val info = clazz.info.asInstanceOf[ClassInfoType]
+      //At this point workerTrait shares info instance x with clazz, but x.typeSymbol
+      //refers to clazz instead of workerTrait and cannot be modified.
+      //Hence we must give workerTrait new ClassInfo with proper typeSymbol field.
+      //We do NOT map over parents and decls yet, for this see the 2nd
+      //case for ClassInfoType in apply.
+      workerTrait setInfo new ClassInfoType(info.parents, info.decls, workerTrait)
+      fixCtors(workerTrait)
+      workerTrait
+    }
+
+    /**
      * Remove constructor symbols and add mixin-ctor symbol
      * for newly created worker trait symbol.
      *
      * TODO how to handle multiple ctors?
      * */
-    def fixCtors(workerTrait : Symbol) {
+    private def fixCtors(workerTrait : Symbol) {
       atPhase(ownPhase) {
         val sym = workerTrait.newMethod(workerTrait.pos, nme.MIXIN_CONSTRUCTOR)
         sym setInfo MethodType(List(), definitions.UnitClass.tpe)
@@ -87,9 +113,6 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
 
         val ctor = workerTrait.info.member(nme.CONSTRUCTOR)
         workerTrait.info.decls.unlink(ctor)
-        
-        println(workerTrait.info.baseClasses)
-        println()
       }
     }
   }
@@ -120,7 +143,7 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
     //}
   }
 
-  protected def mkFactorySym(owner: Symbol, clazz: Symbol): Symbol = {
+  protected def mkFactorySym(owner: Symbol, clazz: Symbol, abstpe: Type): Symbol = {
     atPhase(ownPhase) {
       val factorySym = owner.newMethod(clazz.pos, factoryName(clazz))
       val tparams =  clazz.typeParams map (_.cloneSymbol(factorySym))
@@ -130,7 +153,7 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
           s.tpe.substSym(clazz.typeParams, tparams))
       }
       val params = clazz.primaryConstructor.paramss flatMap  ( _.map (cloneAndSubst))
-      factorySym.setInfo(polyType(tparams, MethodType(params, clazz.tpe.substSym(clazz.typeParams, tparams))))
+      factorySym.setInfo(polyType(tparams, MethodType(params, abstpe.substSym(abstpe.typeParams, tparams))))
       factorySym.setFlag(clazz.flags & AccessFlags | SYNTHETIC)
       factorySym
     }
@@ -259,9 +282,16 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
             }
           })
 
-        case _ =>          
+        case _ =>
           List(transform(tree))
       }
+    }
+
+    /**
+     * Decides if given symbol's owner needs to be replaced by worker trait symbol.
+     */
+    protected def needsOwnerReplaced(sym: Symbol): Boolean = {
+      (sym != null) && (sym ne NoSymbol) && (sym.owner != null) && wasVirtualClass(sym.owner)
     }
 
     override def transform(tree0 : Tree) : Tree = {
@@ -285,7 +315,7 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
           if(wasVirtualClass(tpt.symbol)) =>
           localTyper.typed {   //TODO -Ybrowse shows that symbol.tpe is still the virtual class
             atPos(tpt.pos) {
-              TypeTree(abstractType(tpt.symbol).info)
+              TypeTree(abstractType(tpt.symbol).tpe)
             }
           }
 
@@ -300,9 +330,14 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
             }
           }
 
-        case _ => 
-         // println(tree.getClass())
-         // println(tree)
+        case _ =>
+          val sym = tree.symbol
+          if(needsOwnerReplaced(sym)) {
+            val clazz = sym.owner
+            val workerTraitSym = atPhase(ownPhase.next) { clazz.owner.info.member(workerTraitName(clazz)) }
+            sym.owner = workerTraitSym
+          }
+
           tree setType atPhase(ownPhase){ infoTransformer(tree.tpe) }
       }
     }
