@@ -331,8 +331,60 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
       (sym != null) && (sym ne NoSymbol) && (sym.owner != null) && wasVirtualClass(sym.owner)
     }
 
-    override def transform(tree0 : Tree) : Tree = {
-      val tree = super.transform(tree0)
+
+    /**
+      * Transformation in post-order.
+      *
+      * Eliminates leftover traces of original virtual class symbols:
+      *
+      * - Fixes the owner of tree symbols:
+      * Trees owned by virtual classes should
+      * be owned by worker traits.
+      * We keep this separate from @see preTransform
+      * because replacement of new calls breaks otherwise.
+      * - Changes the types of tree symbols:
+      * e.g. the symbols of ValDef and DefDef trees as their info
+      * might contain virtual class refs.
+      *
+      * See also @see transformStats, @see preTransform, @see transform
+      *
+      * @param tree
+      * @return
+      */
+    protected def postTransform(tree : Tree) : Tree = {
+      val sym = tree.symbol
+      //fix owners
+      if(needsOwnerReplaced(sym)) {
+        val clazz = sym.owner
+        val workerTraitSym = workerTrait(clazz)
+        sym.owner = workerTraitSym
+      }
+      //fix symbol types
+      if(sym != null) {
+        sym.info = atPhase(ownPhase) {
+          infoTransformer(sym.info)
+        }
+      }
+
+      tree
+    }
+
+    /**
+      * Transformation in pre-order.
+      *
+      * Performs transformations that arise from the
+      * trait/factory/type split-up of virtual classes:
+      *
+      * - Changes the type of trees via @see infoTransformer
+      * - Replaces new with call to factory
+      * - Fixes type and self references
+      *
+      * See also @see transformStats, @see postTransform, @see transform
+      *
+      * @param tree
+      * @return
+      */
+    protected def preTransform(tree : Tree) : Tree = {
       tree match {
         //replace new calls with factory calls
         case app @ Apply(sel @ Select(New(tpt), nme.CONSTRUCTOR), args)
@@ -346,6 +398,15 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
                 args)
             }
           }
+
+        //rename local dummyl from <local X> to <local VC_TRAIT$X>
+        case tmpl @ Template(_, _, _)
+          if(wasVirtualClass(tmpl.symbol.owner)) =>
+          val clazz = tmpl.symbol.owner
+          val sym = tmpl.symbol
+          tmpl.setSymbol(sym.cloneSymbol(clazz))
+          tmpl.symbol.name = nme.localDummyName(workerTrait(clazz.owner, clazz))
+          tmpl
 
         //type ref. virtual class -> type ref. abstract type
         case tpt @ TypeTree()
@@ -368,15 +429,14 @@ abstract class VCTransform(val global: Global) extends PluginComponent with Tran
           }
 
         case _ =>
-          val sym = tree.symbol
-          if(needsOwnerReplaced(sym)) {
-            val clazz = sym.owner
-            val workerTraitSym = workerTrait(clazz)
-            sym.owner = workerTraitSym
+          tree setType atPhase(ownPhase){
+             infoTransformer(tree.tpe)
           }
-
-          tree setType atPhase(ownPhase){ infoTransformer(tree.tpe) }
       }
+    }
+
+    override def transform(tree0 : Tree) : Tree = {
+      postTransform(super.transform(preTransform(tree0)))
     }
   }
 }

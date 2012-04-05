@@ -1,6 +1,6 @@
 
 
-class Foo <: {
+class Foo  {
   trait Bar  { val x : Int }
 
   class BarImp extends Bar { val x = 12 }
@@ -17,6 +17,8 @@ class Foo <: {
 
   def factory1 = new X
   def factory2 = new Y
+  val x = new X()
+  var y = new Y()
 }
 
 object Foo {
