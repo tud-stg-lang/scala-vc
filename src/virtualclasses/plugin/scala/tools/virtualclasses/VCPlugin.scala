@@ -14,12 +14,17 @@ class VCPlugin(val global: Global) extends Plugin {
   val name = "virtualclasses"
   val description = "adds support for virtual classes"
 
-  val addPhase = new VCTransform(this.global) {
+  val decomposePhase = new VCDecomposeTransform(this.global) {
     override val runsAfter = List("namer")
     override val runsBefore = List[String]("refchecks") //TODO before superaccessors??
   }
+
+  val finalBindingsPhase = new VCFinalBindingsTransform(this.global) {
+    override val runsRightAfter : Option[String] = Some("vc_decompose")
+    val runsAfter: List[String] = List("vc_decompose")
+  }
   
-  override val components = List[PluginComponent](addPhase)
+  override val components = List[PluginComponent](decomposePhase, finalBindingsPhase)
 
   global.log("instantiated virtualclasses plugin: " + this)
 
