@@ -16,7 +16,7 @@ class VCPlugin(val global: Global) extends Plugin {
 
   val decomposePhase = new VCDecomposeTransform(this.global) {
     override val runsAfter = List("namer")
-    override val runsBefore = List[String]("refchecks") //TODO before superaccessors??
+    override val runsBefore = List[String]("superaccessors")
   }
 
   val finalBindingsPhase = new VCFinalBindingsTransform(this.global) {
