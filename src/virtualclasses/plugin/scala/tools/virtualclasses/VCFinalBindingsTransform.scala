@@ -27,7 +27,7 @@ with TypingTransformers with InfoTransform with Commons {
 
           val decls = new Scope
           def enter(sym: Symbol) =
-            atPhase(ownPhase.next) { decls.enter(sym) }
+            /*atPhase(ownPhase.next) {*/ decls.enter(sym) /*}*/
           for (m <- decls0) {
             enter(m)
             if (isInitialBinding(m))
@@ -43,10 +43,9 @@ with TypingTransformers with InfoTransform with Commons {
 
   def mkFinalBindingSym(initBinding : Symbol) : Symbol = {
     val fbname = finalBindingName(initBinding)
-    val fbsym = initBinding.owner.enclClass.newClass(fbname, initBinding.pos).setFlag(FINAL | SYNTHETIC)
+    val fbsym = initBinding.owner.enclClass.newClass(fbname, initBinding.pos).setFlag(SYNTHETIC)
     val parents = List(initBinding.tpe, definitions.ScalaObjectClass.tpe)
     val scope = new Scope
-
     fbsym setInfo ClassInfoType(parents, scope, fbsym)
 
     //for every abstract type, create alias and provide factory definition
@@ -81,10 +80,12 @@ with TypingTransformers with InfoTransform with Commons {
     protected def mkConcreteClassSym(factory: Symbol, initBinding: Symbol) = {
       val workerTraitSym = factory.enclClass.info.member(workerTraitName(factory))
       val cclazz = factory.newClass(factory.pos, concreteClassName(factory))
-        .setFlag(FINAL | SYNTHETIC)
+        .setFlag(SYNTHETIC)
+        .setAnnotations(initBinding.annotations)
       val parentClass = (workerTraitSym.info.baseClasses.dropWhile (_.isTrait)).head.tpe
       val mixins = (workerTraitSym.info.baseClasses.filter (_.isTrait)).distinct.reverse.map (_.tpe)
       val parents = (parentClass :: mixins).map(_.substThis(initBinding, ThisType(factory.enclClass)).substSym(workerTraitSym.typeParams, factory.typeParams)) //TODO is this sufficient?
+
       cclazz setInfo ClassInfoType(parents, new Scope, cclazz)
       cclazz
     }
@@ -116,9 +117,11 @@ with TypingTransformers with InfoTransform with Commons {
 
       val body : List[Tree] = (tpeBindings map mkAbsTpeBinding) ::: (factories map (mkFactoryDefDef(_, initBinding)))
 
+      val classDef = ClassDef(finalBinding, Modifiers(0), List(List()), List(List()), body, initBinding.pos)  //TODO which modifiers?
+
       localTyper.typed {
         atPos(initBinding.pos) {
-          ClassDef(finalBinding, NoMods, Nil, Nil, body, initBinding.pos)  //TODO which modifiers?
+            classDef
         }
       }
     }
@@ -130,11 +133,11 @@ with TypingTransformers with InfoTransform with Commons {
     protected def transformStat(tree: Tree): List[Tree] = {
       val sym = tree.symbol
       tree match {
-        case ClassDef(mods, name, tparams, templ)
+        case cd @ ClassDef(mods, name, tparams, templ)
           if (isInitialBinding(sym)) =>
           val fbtree = mkFinalBinding(sym)
-          List(ClassDef(mods, name, tparams, transform(templ).asInstanceOf[Template]), fbtree)
-
+          //List(ClassDef(mods, name, tparams, transform(templ).asInstanceOf[Template]), fbtree)
+          List(cd, fbtree)
         case _ => List(transform(tree))
       }
     }

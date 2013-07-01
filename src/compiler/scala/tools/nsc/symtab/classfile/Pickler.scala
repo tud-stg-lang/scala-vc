@@ -63,7 +63,7 @@ abstract class Pickler extends SubComponent {
       // to nothing about what happened, but our supposition is a lot better
       // than "bad type: <error>" in terms of explanatory power.
       for (t <- unit.body ; if t.isErroneous) {
-        unit.error(t.pos, "erroneous or inaccessible type")
+        unit.error(t.pos, "erroneous or inaccessible type: " + t.toString)
         return
       }
 

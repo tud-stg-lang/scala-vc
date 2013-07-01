@@ -47,7 +47,7 @@ trait Commons {
 
   def isInitialBinding(sym : Symbol) : Boolean = {
     //TODO find an alternative way to determine this (add new flags?)
-    sym.isTrait && sym.info.members.exists(x => x.isTrait && x.name.startsWith(TRAITPREFIX))
+    sym.info.members.exists(x => x.isTrait && x.name.startsWith(TRAITPREFIX))
   }
 
   def containsInitialBindings(sym : Symbol) : Boolean = {

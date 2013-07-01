@@ -50,7 +50,8 @@ abstract class VCDecomposeTransform(val global: Global) extends PluginComponent 
             else enter(m)
           }
 
-          clazz setFlag TRAIT
+          //clazz setFlag TRAIT
+          clazz setFlag ABSTRACT
 
           ClassInfoType(parents map this, decls, clazz)
 
