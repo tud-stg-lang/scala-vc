@@ -142,12 +142,25 @@ with TypingTransformers with InfoTransform with Commons {
       }
     }
 
-    //TODO replace ctor calls to initial bindings
     override def transform(tree0 : Tree) : Tree = {
       val tree = super.transform(tree0)
 
-      tree setType atPhase(ownPhase) {
+      postTransform(tree setType atPhase(ownPhase) {
         infoTransformer(tree.tpe)
+      })
+    }
+
+    protected def postTransform(tree : Tree) : Tree = {
+      tree match {
+        //replace new calls to family class with the final implementation of the family class
+        case app @ Apply(sel @ Select(New(tpt), nme.CONSTRUCTOR), args)
+          if(isInitialBinding(app.symbol.owner) &&  app.symbol.isConstructor) =>
+          localTyper.typed {
+            atPos(tree.pos) {
+              Apply(Select(New(finalBindingSym(app.symbol.owner)), nme.CONSTRUCTOR), args)
+            }
+          }
+        case t => t
       }
     }
   }
