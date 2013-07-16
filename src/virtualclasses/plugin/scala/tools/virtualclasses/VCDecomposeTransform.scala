@@ -82,6 +82,8 @@ abstract class VCDecomposeTransform(val global: Global) extends PluginComponent 
      * The resulting symbol's info shares the parents and
      * decls fields with the virtual class symbol.
      */
+    //TODO: inherit from AnyRef
+    //TODO: include self ref
     private def mkWorkerTraitSym(clazz: Symbol): Symbol = {
       val workerTrait = clazz.cloneSymbol(clazz.owner)
       workerTrait.setFlag(TRAIT | SYNTHETIC)
@@ -104,6 +106,7 @@ abstract class VCDecomposeTransform(val global: Global) extends PluginComponent 
      * for newly created worker trait symbol.
      *
      * TODO how to handle multiple ctors?
+     * TODO remove mixin constructors and rewrite it to perform like odersky's sample expansion
      * */
     private def fixCtors(workerTrait : Symbol) {
       atPhase(ownPhase) {
@@ -353,8 +356,10 @@ abstract class VCDecomposeTransform(val global: Global) extends PluginComponent 
             atPos(tree.pos) {
               gen.mkMethodCall(Select(gen.mkAttributedQualifier(tpt.tpe.prefix),
                 factoryName(clazz)),
-                tpt.tpe.typeArgs,
-                args)
+              //  tpt.tpe.typeArgs,
+              //  args)
+              List(),
+              List())
             }
           }
 
