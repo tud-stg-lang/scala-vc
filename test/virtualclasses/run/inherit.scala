@@ -3,8 +3,6 @@ class Foo  {
 
   class Y <: { }
 
-
-
   def factory1 = new X
   def factory2 = new Y
   val x = new X()

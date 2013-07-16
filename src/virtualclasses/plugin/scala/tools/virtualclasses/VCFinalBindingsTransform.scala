@@ -92,7 +92,7 @@ with TypingTransformers with InfoTransform with Commons {
 
     protected def mkFactoryDefDef(factory : Symbol, initBinding: Symbol): Tree = {
       val cclazzSym = mkConcreteClassSym(factory, initBinding)
-      val cclazzDef = ClassDef(cclazzSym, Modifiers(0), List(List()), List(List()), List(), factory.enclClass.pos.focus)
+      val cclazzDef = ClassDef(cclazzSym, NoMods, List(List()), List(List()), List(), factory.enclClass.pos.focus)
 
       val args = factory.paramss map (_.map(Ident))  //TODO clone or not?
       val body = Block(List(cclazzDef),
@@ -136,8 +136,9 @@ with TypingTransformers with InfoTransform with Commons {
         case cd @ ClassDef(mods, name, tparams, templ)
           if (isInitialBinding(sym)) =>
           val fbtree = mkFinalBinding(sym)
-          //List(ClassDef(mods, name, tparams, transform(templ).asInstanceOf[Template]), fbtree)
-          List(cd, fbtree)
+          val newCd = ClassDef(mods, name, tparams, transform(templ).asInstanceOf[Template])
+          newCd.copyAttrs(cd)
+          List(newCd, fbtree)
         case _ => List(transform(tree))
       }
     }
