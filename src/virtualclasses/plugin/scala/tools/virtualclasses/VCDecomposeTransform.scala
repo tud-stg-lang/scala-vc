@@ -384,8 +384,8 @@ abstract class VCDecomposeTransform(val global: Global) extends PluginComponent 
         //self reference virtual class -> self ref. worker trait
         case ths @ This(qual)
           if(wasVirtualClass(ths.symbol)) =>
-          val workerTraitSym = ths.symbol.owner.info.member(workerTraitName(qual))
-          val newThs = This(workerTraitName(qual)).setSymbol(workerTraitSym)
+          val workerTraitSym = ths.symbol.owner.info.member(workerTraitName(ths.symbol))
+          val newThs = This(workerTraitName(ths.symbol)).setSymbol(workerTraitSym)
           localTyper.typed {
             atPos(ths.pos) {
               newThs

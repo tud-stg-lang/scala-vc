@@ -54,6 +54,20 @@ trait Commons {
     sym.info.members.exists(isInitialBinding)
   }
 
+  def stripAllPrefixes(name: Name) = {
+    val prefixToStrip =
+      if(parent.startsWith(ABSTPEPREFIX))
+        ABSTPEPREFIX
+      else if (parent.startsWith(FACTORYPREFIX))
+        FACTORYPREFIX
+      else if (parent.startsWith(CCLASSPREFIX))
+        CCLASSPREFIX
+      else if (parent.startsWith(FINALPREFIX))
+        FINALPREFIX
+      else ""
+    newTypeName(name.toString.stripPrefix(prefixToStrip))
+  }
+
   def factoryName(clazz: Symbol) = { //TODO make method more robust
     val prefixToStrip =
     if(clazz.name.startsWith(ABSTPEPREFIX))
@@ -67,9 +81,10 @@ trait Commons {
     newTermName(FACTORYPREFIX+(clazz.name.toString().stripPrefix(prefixToStrip)))
   }
 
-  def workerTraitName(sym: Symbol) : TypeName = workerTraitName(sym.name)
+  def workerTraitName(sym: Symbol) : TypeName =
+    workerTraitName(sym.name, sym.owner.name)
 
-  def workerTraitName(name: Name) : TypeName = {
+  def workerTraitName(name: Name, parent: Name) : TypeName = {
     if(name.startsWith(TRAITPREFIX))
       return name.toTypeName
 
@@ -82,7 +97,18 @@ trait Commons {
         CCLASSPREFIX
       else ""
 
-    newTypeName(TRAITPREFIX+(name.toString().stripPrefix(prefixToStrip)))
+    val parentprefixToStrip =
+      if(parent.startsWith(ABSTPEPREFIX))
+        ABSTPEPREFIX
+      else if (parent.startsWith(FACTORYPREFIX))
+        FACTORYPREFIX
+      else if (parent.startsWith(CCLASSPREFIX))
+        CCLASSPREFIX
+      else if (parent.startsWith(FINALPREFIX))
+        FINALPREFIX
+      else ""
+
+    newTypeName(TRAITPREFIX + parent.toString.stripPrefix(parentprefixToStrip) + "$" +(name.toString().stripPrefix(prefixToStrip)))
   }
 
   def concreteClassName(sym : Symbol) : TypeName = {
