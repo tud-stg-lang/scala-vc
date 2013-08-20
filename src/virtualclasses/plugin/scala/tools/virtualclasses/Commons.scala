@@ -56,20 +56,22 @@ trait Commons {
 
   def stripAllPrefixes(name: Name) = {
     val prefixToStrip =
-      if(parent.startsWith(ABSTPEPREFIX))
+      if(name.startsWith(ABSTPEPREFIX))
         ABSTPEPREFIX
-      else if (parent.startsWith(FACTORYPREFIX))
+      else if (name.startsWith(FACTORYPREFIX))
         FACTORYPREFIX
-      else if (parent.startsWith(CCLASSPREFIX))
+      else if (name.startsWith(CCLASSPREFIX))
         CCLASSPREFIX
-      else if (parent.startsWith(FINALPREFIX))
+      else if (name.startsWith(FINALPREFIX))
         FINALPREFIX
       else ""
-    newTypeName(name.toString.stripPrefix(prefixToStrip))
+    name.toString.stripPrefix(prefixToStrip)
   }
 
+  def vcAbstractTypeName(clazz: Symbol) = newTypeName(ABSTPEPREFIX + stripAllPrefixes(clazz.name))
+
   def factoryName(clazz: Symbol) = { //TODO make method more robust
-    val prefixToStrip =
+  val prefixToStrip =
     if(clazz.name.startsWith(ABSTPEPREFIX))
       ABSTPEPREFIX
     else if (clazz.name.startsWith(TRAITPREFIX))

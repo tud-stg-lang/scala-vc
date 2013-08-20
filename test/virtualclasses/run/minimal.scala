@@ -22,11 +22,12 @@ abstract class A {
 class VC_FINAL_T$A extends A {
   type B = VC_TRAIT_T$B
   
-  class VC_FIX_T$B extends VC_TRAIT_T$B {
+  def VC_NEW_T$B(): B = {
+    class VC_FIX_T$B extends VC_TRAIT_T$B {
   
+    }
+    new VC_FIX_T$B().asInstanceOf[B]
   }
-  
-  def VC_NEW_T$B(): B = new VC_FIX_T$B()
 }
 
 object F {
